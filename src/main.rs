@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::fs::{read_dir, read_link};
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use walkdir::WalkDir;
 
 use clap::Parser;
@@ -80,6 +80,7 @@ pub fn scan_for_target_dirs(
     dir: PathBuf,
     cutoff: Option<SystemTime>,
     actually_delete: bool,
+    stack: &mut Vec<PathBuf>,
 ) -> u64 {
     let mut to_check = Vec::new();
     let mut has_cargo_toml = false;
@@ -171,14 +172,47 @@ pub fn scan_for_target_dirs(
         }
     } else {
         let mut total_size = 0;
-        for thing in to_check {
-            total_size += scan_for_target_dirs(thing, cutoff, actually_delete);
+        'a: for thing in to_check {
+            let canonical_path = match thing.clone().canonicalize() {
+                Ok(v) => v,
+                Err(e) => {
+                    println!("Error resolving path {}: {}", thing.display(), e);
+                    continue 'a;
+                }
+            };
+            /*println!("Thing: {}", thing.display());
+            println!("Canonical: {}", canonical_path.display());
+            println!(
+                "Stack: {}",
+                stack
+                    .iter()
+                    .map(|s| s.to_str().unwrap())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );*/
+            for i in 0..stack.len() {
+                if stack[i] == canonical_path {
+                    if stack.contains(&canonical_path) {
+                        println!("Warning: circular symlink reference detected:");
+                        for j in i..stack.len() {
+                            println!("\t{}", stack[j].display());
+                        }
+                        println!("\t{}", canonical_path.display());
+                        continue 'a;
+                    }
+                    break;
+                }
+            }
+            stack.push(canonical_path);
+            total_size += scan_for_target_dirs(thing, cutoff, actually_delete, stack);
+            stack.pop();
         }
         return total_size;
     }
 }
 fn main() {
     let args = Args::parse();
+    let mut stack = Vec::new();
     let cutoff = if args.days_old == 0 {
         None
     } else {
@@ -188,9 +222,12 @@ fn main() {
     if !args.actually_delete {
         println!("Because you ran without --actually-delete, no folders will actually be deleted. This will simply list out what would be deleted, which is useful for debug purposes.");
     }
-    let size = scan_for_target_dirs(args.path, cutoff, args.actually_delete);
+    stack.push(args.path.clone());
+    let start_time = Instant::now();
+    let size = scan_for_target_dirs(args.path, cutoff, args.actually_delete, &mut stack);
     println!(
-        "Deleted {} of data in target folders",
-        humansize::format_size(size, DECIMAL)
+        "Deleted {} of data in target folders in {} seconds",
+        humansize::format_size(size, DECIMAL),
+        (Instant::now() - start_time).as_secs_f32(),
     );
 }
