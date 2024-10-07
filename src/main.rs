@@ -105,19 +105,26 @@ pub fn scan_for_target_dirs(
                             to_check.push(path);
                         } else if file_type.is_symlink() {
                             match read_link(&path) {
-                                Ok(inner) => match std::fs::metadata(&inner) {
-                                    Ok(metadata) => {
-                                        if metadata.is_dir() {
-                                            to_check.push(path);
+                                Ok(inner) => {
+                                    let symlink_target = if inner.is_relative() {
+                                        dir.join(&inner)
+                                    } else {
+                                        inner
+                                    };
+                                    match std::fs::metadata(&symlink_target) {
+                                        Ok(metadata) => {
+                                            if metadata.is_dir() {
+                                                to_check.push(path);
+                                            }
                                         }
-                                    }
-                                    Err(e) => println!(
+                                        Err(e) => println!(
                                         "Error reading metadata of entry {} behind symlink {}: {}",
-                                        inner.display(),
+                                        symlink_target.display(),
                                         path.display(),
                                         e
                                     ),
-                                },
+                                    }
+                                }
                                 Err(e) => {
                                     println!("Error following symlink {}: {}", path.display(), e)
                                 }
