@@ -1,7 +1,6 @@
 use humansize::DECIMAL;
-use std::ffi::OsString;
 use std::fs::{read_dir, read_link};
-use std::io::{self, ErrorKind};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 use walkdir::WalkDir;
@@ -34,43 +33,41 @@ pub fn check_target_dir_date(dir: &Path, cutoff: SystemTime) -> Option<u64> {
     let mut total_size = 0;
     for entry in WalkDir::new(dir) {
         match entry {
-            Ok(entry) => {
-                let a = 0;
-                match entry.metadata() {
-                    Ok(metadata) => {
-                        match metadata.modified() {
-                            Ok(time) => {
-                                if time > cutoff {
-                                    return None;
-                                }
-                            }
-                            Err(e) => {
-                                if e.kind() == ErrorKind::Unsupported {
-                                    println!("This platform does not support finding the modification date of files!");
-                                    std::process::exit(1);
-                                }
+            Ok(entry) => match entry.metadata() {
+                Ok(metadata) => {
+                    match metadata.modified() {
+                        Ok(time) => {
+                            if time > cutoff {
+                                return None;
                             }
                         }
-                        if metadata.is_file() {
-                            total_size += metadata.len();
+                        Err(e) => {
+                            if e.kind() == ErrorKind::Unsupported {
+                                println!("This platform does not support finding the modification date of files!");
+                                std::process::exit(1);
+                            }
                         }
                     }
-                    Err(e) => {
-                        let io_error = e.io_error();
-                        if io_error.is_some() && io_error.unwrap().kind() == ErrorKind::Unsupported
-                        {
-                            println!("This platform does not support finding the metadata date of files!");
-                            std::process::exit(1);
-                        }
-                        println!(
-                            "Error accessing metadata of file {}: {e}, skipping cleaning folder {}",
-                            entry.path().display(),
-                            dir.display()
-                        );
-                        return None;
+                    if metadata.is_file() {
+                        total_size += metadata.len();
                     }
                 }
-            }
+                Err(e) => {
+                    let io_error = e.io_error();
+                    if io_error.is_some() && io_error.unwrap().kind() == ErrorKind::Unsupported {
+                        println!(
+                            "This platform does not support finding the metadata date of files!"
+                        );
+                        std::process::exit(1);
+                    }
+                    println!(
+                        "Error accessing metadata of file {}: {e}, skipping cleaning folder {}",
+                        entry.path().display(),
+                        dir.display()
+                    );
+                    return None;
+                }
+            },
             Err(e) => println!("Error accessing entry in folder: {e}"),
         }
     }
@@ -146,7 +143,7 @@ pub fn scan_for_target_dirs(
             match fs_extra::dir::get_size(&target_path) {
                 Ok(size) => Some(size),
                 Err(e) => {
-                    println!("");
+                    println!("Error getting directory size: {e}");
                     return 0;
                 }
             }
@@ -166,9 +163,9 @@ pub fn scan_for_target_dirs(
                     );
                 }
             }
-            return size;
+            size
         } else {
-            return 0;
+            0
         }
     } else {
         let mut total_size = 0;
@@ -194,8 +191,8 @@ pub fn scan_for_target_dirs(
                 if stack[i] == canonical_path {
                     if stack.contains(&canonical_path) {
                         println!("Warning: circular symlink reference detected:");
-                        for j in i..stack.len() {
-                            println!("\t{}", stack[j].display());
+                        for element in stack.iter().skip(i) {
+                            println!("\t{}", element.display());
                         }
                         println!("\t{}", canonical_path.display());
                         continue 'a;
@@ -207,7 +204,7 @@ pub fn scan_for_target_dirs(
             total_size += scan_for_target_dirs(thing, cutoff, actually_delete, stack);
             stack.pop();
         }
-        return total_size;
+        total_size
     }
 }
 fn main() {
