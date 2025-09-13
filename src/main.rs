@@ -43,7 +43,9 @@ pub fn check_target_dir_date(dir: &Path, cutoff: SystemTime) -> Option<u64> {
                         }
                         Err(e) => {
                             if e.kind() == ErrorKind::Unsupported {
-                                println!("This platform does not support finding the modification date of files!");
+                                println!(
+                                    "This platform does not support finding the modification date of files!"
+                                );
                                 std::process::exit(1);
                             }
                         }
@@ -117,11 +119,11 @@ pub fn scan_for_target_dirs(
                                             }
                                         }
                                         Err(e) => println!(
-                                        "Error reading metadata of entry {} behind symlink {}: {}",
-                                        symlink_target.display(),
-                                        path.display(),
-                                        e
-                                    ),
+                                            "Error reading metadata of entry {} behind symlink {}: {}",
+                                            symlink_target.display(),
+                                            path.display(),
+                                            e
+                                        ),
                                     }
                                 }
                                 Err(e) => {
@@ -158,13 +160,11 @@ pub fn scan_for_target_dirs(
                 }
             };
             if let Some(size) = should_delete {
-                if actually_delete {
-                    if let Err(e) = std::fs::remove_dir_all(&target_path) {
-                        println!(
-                            "Error deleting target directory {}: {e}",
-                            target_path.display(),
-                        );
-                    }
+                if actually_delete && let Err(e) = std::fs::remove_dir_all(&target_path) {
+                    println!(
+                        "Error deleting target directory {}: {e}",
+                        target_path.display(),
+                    );
                 }
                 total_size += size;
             }
@@ -215,7 +215,9 @@ fn main() {
     };
     println!("WARNING: recursive symlinks WILL cause this program to freeze.");
     if !args.actually_delete {
-        println!("Because you ran without --actually-delete, no folders will actually be deleted. This will simply list out what would be deleted, which is useful for debug purposes.");
+        println!(
+            "Because you ran without --actually-delete, no folders will actually be deleted. This will simply list out what would be deleted, which is useful for debug purposes."
+        );
     }
     stack.push(args.path.clone());
     let start_time = Instant::now();
