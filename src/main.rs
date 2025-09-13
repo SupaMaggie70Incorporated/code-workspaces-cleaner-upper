@@ -82,6 +82,7 @@ pub fn scan_for_target_dirs(
     let mut to_check = Vec::new();
     let mut has_cargo_toml = false;
     let mut has_target_dir = false;
+    const TARGET_DIR_NAMES: &[&str] = &["target", "target-rust-analyzer"];
     match read_dir(&dir) {
         Ok(entries) => {
             for entry in entries {
@@ -90,7 +91,7 @@ pub fn scan_for_target_dirs(
                         if let Ok(name) = entry.file_name().into_string() {
                             if name.as_str() == "Cargo.toml" {
                                 has_cargo_toml = true
-                            } else if name.as_str() == "target" {
+                            } else if TARGET_DIR_NAMES.contains(&name.as_str()) {
                                 has_target_dir = true
                             }
                             if has_cargo_toml && has_target_dir {
@@ -136,37 +137,44 @@ pub fn scan_for_target_dirs(
         Err(e) => println!("Error scanning directory {}: {}", dir.display(), e),
     }
     if has_cargo_toml && has_target_dir {
-        let target_path = dir.join("target");
-        let should_delete = if let Some(cutoff) = cutoff {
-            check_target_dir_date(&target_path, cutoff)
-        } else {
-            match fs_extra::dir::get_size(&target_path) {
-                Ok(size) => Some(size),
-                Err(e) => {
-                    println!("Error getting directory size: {e}");
-                    return 0;
-                }
+        let mut total_size = 0;
+        for &folder_subname in TARGET_DIR_NAMES {
+            let target_path = dir.join(folder_subname);
+            if !target_path.exists() {
+                continue;
             }
-        };
-        if let Some(size) = should_delete {
-            println!(
-                "Deleting {} of files in target directory {}",
-                humansize::format_size(size, DECIMAL),
-                target_path.display()
-            );
-            if actually_delete {
-                if let Err(e) = std::fs::remove_dir_all(&target_path) {
-                    println!(
-                        "Error deleting target directory {}: {}",
-                        target_path.display(),
-                        e
-                    );
+            let should_delete = if let Some(cutoff) = cutoff {
+                check_target_dir_date(&target_path, cutoff)
+            } else {
+                match fs_extra::dir::get_size(&target_path) {
+                    Ok(size) => Some(size),
+                    Err(e) => {
+                        println!(
+                            "Error getting size of directory {}: {e}",
+                            target_path.display()
+                        );
+                        continue;
+                    }
                 }
+            };
+            if let Some(size) = should_delete {
+                if actually_delete {
+                    if let Err(e) = std::fs::remove_dir_all(&target_path) {
+                        println!(
+                            "Error deleting target directory {}: {e}",
+                            target_path.display(),
+                        );
+                    }
+                }
+                total_size += size;
             }
-            size
-        } else {
-            0
         }
+        println!(
+            "Deleting {} of files in workspace {}",
+            humansize::format_size(total_size, DECIMAL),
+            dir.display()
+        );
+        total_size
     } else {
         let mut total_size = 0;
         'a: for thing in to_check {
@@ -177,16 +185,6 @@ pub fn scan_for_target_dirs(
                     continue 'a;
                 }
             };
-            /*println!("Thing: {}", thing.display());
-            println!("Canonical: {}", canonical_path.display());
-            println!(
-                "Stack: {}",
-                stack
-                    .iter()
-                    .map(|s| s.to_str().unwrap())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );*/
             for i in 0..stack.len() {
                 if stack[i] == canonical_path {
                     if stack.contains(&canonical_path) {
